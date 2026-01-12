@@ -10,20 +10,15 @@ from transformers import (
     pipeline,
 )
 
-# ----------------------------------------------------------------------
-# CONFIG
-# ----------------------------------------------------------------------
-HF_USERNAME = "priyanshis9876"  # change if needed
+HF_USERNAME = "priyanshis9876"  
 
 TRANSLATOR_MODEL_ID = f"{HF_USERNAME}/translator"
 ENG_SENTIMENT_MODEL_ID = f"{HF_USERNAME}/eng_sentiment"
 SING_SENTIMENT_MODEL_ID = f"{HF_USERNAME}/sing_sentiment_singbert"
 
-# Predefined Singlish sentences
 SINGLISH_EXAMPLES = [
     "Aiyo… whole day like that, really sian until cannot.",
     "Okay lor, like that we just settle here can already.",
-    "Knn this project stress until no mood sia.",
     "I scared until my hand shaking sia.",
     "later boss see my mistake sure die one",
     "Ok lor, like that can already lah. Anything also can",
@@ -31,20 +26,19 @@ SINGLISH_EXAMPLES = [
     "Eh? Serious ah? I really cannot believe sia.",
     "Today mood damn off… really no strength to face anyone lor.",
     "Sian… every time like this, slowly I also no hope already",
-    "Knn lah why they like that again? Make me so tulan.",
     "Wah lao, you all never listen again, waste my time sia.",
     "Tonight must walk home alone, very scared one you know",
     "this place so dark, later got something jump out how",
     "Alamak this place so dark, later got something jump out how?",
     "Okay lah, like that settle lor. No big deal one.",
     "Wah piang eh, I never expect you to show up sia",
-    "You suddenly shout like that I almost drop my heart"
+    "You suddenly shout like that I almost drop my heart",
+    "Haiz feeling very sad... my dog passed away",
+    "Wah today really damn shiok leh!",
+    
 ]
 
 
-# ----------------------------------------------------------------------
-# SHAP helper to show plots in Streamlit
-# ----------------------------------------------------------------------
 import streamlit.components.v1 as components
 
 
@@ -66,10 +60,6 @@ def st_shap(plot_html: str, height: int | None = None):
     components.html(styled_html, height=height)
 
 
-
-# ----------------------------------------------------------------------
-# Singlish Reasoning Explainer (adapted for Streamlit)
-# ----------------------------------------------------------------------
 class SinglishReasoningExplainer:
     def __init__(self, model_id: str):
         """
@@ -77,7 +67,6 @@ class SinglishReasoningExplainer:
         """
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        # Load model and tokenizer from Hugging Face Hub
         self.tokenizer = AutoTokenizer.from_pretrained(model_id)
         self.model = AutoModelForSequenceClassification.from_pretrained(model_id)
         self.model.to(self.device)
@@ -86,7 +75,6 @@ class SinglishReasoningExplainer:
         self.id2label = self.model.config.id2label
         self.label2id = self.model.config.label2id
 
-        # Map LABEL_X to emotion names
         self.emotion_mapping = {
             "LABEL_0": "anger",
             "LABEL_1": "fear",
@@ -96,7 +84,6 @@ class SinglishReasoningExplainer:
             "LABEL_5": "surprise"
         }
 
-        # HF pipeline for predictions
         self.pipe = pipeline(
             "text-classification",
             model=self.model,
@@ -105,7 +92,6 @@ class SinglishReasoningExplainer:
             device=0 if torch.cuda.is_available() else -1,
         )
 
-        # SHAP explainer on top of the pipeline
         self.explainer = shap.Explainer(self.pipe)
 
     def analyze_text(self, text: str):
@@ -135,7 +121,6 @@ class SinglishReasoningExplainer:
         if not word_impacts:
             return "Could not build explanation for this input."
 
-        # Sort by impact descending
         word_impacts.sort(key=lambda x: x[1], reverse=True)
 
         drivers = [w for w in word_impacts if w[1] > 0]
@@ -176,11 +161,8 @@ The model reads this as **{top_emotion}**. Words with strong positive impact on 
 
     def shap_plot_with_labels(self, shap_values):
         """Generate SHAP plot with human-readable emotion labels"""
-        # Replace LABEL_X with emotion names in the output names
         if hasattr(shap_values, 'output_names') and shap_values.output_names is not None:
-            # Store original output names
             original_names = shap_values.output_names
-            # Replace with human-readable names
             shap_values.output_names = [
                 self.emotion_mapping.get(name, name) 
                 for name in original_names
@@ -189,19 +171,14 @@ The model reads this as **{top_emotion}**. Words with strong positive impact on 
         return shap.plots.text(shap_values, display=False)
 
 
-# ----------------------------------------------------------------------
-# Cached loading of models and pipelines
-# ----------------------------------------------------------------------
 @st.cache_resource
 def load_components():
-    # Translator pipeline
     translator = pipeline(
         "translation",
         model=TRANSLATOR_MODEL_ID,
         tokenizer=TRANSLATOR_MODEL_ID,
     )
 
-    # English sentiment pipeline
     eng_sentiment_pipe = pipeline(
         "text-classification",
         model=ENG_SENTIMENT_MODEL_ID,
@@ -209,15 +186,11 @@ def load_components():
         return_all_scores=True,
     )
 
-    # Singlish explainer (includes its own pipeline)
     singlish_explainer = SinglishReasoningExplainer(SING_SENTIMENT_MODEL_ID)
 
     return translator, eng_sentiment_pipe, singlish_explainer
 
 
-# ----------------------------------------------------------------------
-# Streamlit UI
-# ----------------------------------------------------------------------
 def main():
     st.set_page_config(
         page_title="Singlish vs English Sentiment Demo", 
@@ -248,58 +221,54 @@ def main():
         **Path 1**: Translate Singlish → English → Run English sentiment model  
         **Path 2**: Run Singlish sentiment model directly with explainability
         
-        ⚠️ *Translation can lose crucial sentiment nuances!*
+        *Translation can lose crucial sentiment nuances!*
         """
     )
 
-    # Dropdown for sentence selection
     selected_text = st.selectbox(
-        "🗣️ Select a Singlish sentence to analyze:",
+        "Select a Singlish sentence to analyze:",
         options=SINGLISH_EXAMPLES,
         index=0
     )
-    
-    # Optional: Allow custom input
-    with st.expander("✏️ Or enter your own Singlish text"):
-        custom_text = st.text_area(
-            "Custom Singlish text", 
-            height=100, 
-            placeholder="Type your Singlish sentence here..."
-        )
-        if st.button("Use Custom Text") and custom_text.strip():
-            selected_text = custom_text
+    user_input = st.text_input(
+        "Or type your own Singlish sentence:",
+        value="",
+        placeholder="Type a Singlish sentence here (optional)..."
+    )
 
     st.markdown("---")
 
-    if st.button("🚀 Run Analysis", type="primary") and selected_text.strip():
-        translator, eng_pipe, sing_explainer = load_components()
+    if st.button("Run Analysis", type="primary"):
+        text_to_analyze = user_input.strip() if user_input.strip() else selected_text
 
-        with st.spinner("🔄 Analyzing sentiment across both models..."):
-            # Left side: translation then English sentiment
-            translated = translator(selected_text)[0]["translation_text"]
+        if not text_to_analyze:
+            st.warning("Please select or type a sentence to analyze.")
+        else:
+            translator, eng_pipe, sing_explainer = load_components()
 
-            eng_scores = eng_pipe(translated)[0]
-            eng_scores = sorted(eng_scores, key=lambda x: x["score"], reverse=True)
-            eng_top = eng_scores[0]
+            with st.spinner("🔄 Analyzing sentiment across both models..."):
+                translated = translator(text_to_analyze)[0]["translation_text"]
 
-            # Right side: Singlish sentiment with SHAP explanation
-            sing_shap_values = sing_explainer.analyze_text(selected_text)
-            sing_label_id, sing_label, sing_conf, sing_all = sing_explainer.predict_top_label(
-                selected_text
-            )
-            sing_narrative = sing_explainer.generate_narrative(
-                selected_text, sing_shap_values
-            )
+                eng_scores = eng_pipe(translated)[0]
+                eng_scores = sorted(eng_scores, key=lambda x: x["score"], reverse=True)
+                eng_top = eng_scores[0]
+
+                sing_shap_values = sing_explainer.analyze_text(text_to_analyze)
+                sing_label_id, sing_label, sing_conf, sing_all = sing_explainer.predict_top_label(
+                    text_to_analyze
+                )
+                sing_narrative = sing_explainer.generate_narrative(
+                    text_to_analyze, sing_shap_values
+                )
 
         col1, col2 = st.columns(2, gap="large")
 
         with col1:
             st.header("🔄 Path 1: Translation → English Model")
             
-            st.subheader("📝 Translated Text")
+            st.subheader(" Translated Text")
             st.info(translated)
 
-            # English label mapping
             english_emotion_mapping = {
                 "LABEL_0": "joy",
                 "LABEL_1": "anger",
@@ -311,9 +280,8 @@ def main():
 
             eng_top_human = english_emotion_mapping.get(eng_top["label"], eng_top["label"])
 
-            st.subheader("🎭 English Sentiment Prediction")
+            st.subheader("English Sentiment Prediction")
             
-            # Display as metric
             st.metric(
                 label="Detected Emotion",
                 value=eng_top_human.upper(),
@@ -330,33 +298,31 @@ def main():
         with col2:
             st.header("🇸🇬 Path 2: Direct Singlish Model")
             
-            st.subheader("🎭 Singlish Sentiment Prediction")
+            st.subheader(" Singlish Sentiment Prediction")
             
-            # Display as metric
             st.metric(
                 label="Detected Emotion",
                 value=sing_label.upper(),
                 delta=f"{sing_conf:.1%} confidence"
             )
 
-            st.subheader("🧠 Reasoning Narrative")
+            st.subheader(" Reasoning Narrative")
             st.markdown(sing_narrative)
 
-            st.subheader("🔍 Token-Level Impact (SHAP)")
+            st.subheader("Token-Level Impact (SHAP)")
             try:
                 plot = sing_explainer.shap_plot_with_labels(sing_shap_values)
                 st_shap(plot, height=400)
             except Exception as e:
                 st.warning(f"⚠️ Could not render SHAP text plot: {e}")
         
-        # Comparison section
         st.markdown("---")
         st.subheader("📊 Key Differences")
         
         comp_col1, comp_col2, comp_col3 = st.columns(3)
         
         with comp_col1:
-            st.metric("Original Text Language", "Singlish 🇸🇬")
+            st.metric("Original Text Language", "Singlish")
         
         with comp_col2:
             eng_top_human = english_emotion_mapping.get(eng_top["label"], eng_top["label"])
