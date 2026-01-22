@@ -29,7 +29,7 @@ The trained models are uploaded to Hugging Face. Trial code and final model trai
 ## Installation and Running Instructions
 
 ### Prerequisites
-- Python 3.10 or higher
+- Python 3.12
 - pip (Python package installer)
 
 ### Steps
